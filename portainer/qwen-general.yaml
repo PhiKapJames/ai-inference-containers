@@ -1,0 +1,61 @@
+services:
+  qwen-general:
+    image: ghcr.io/phikapjames/qwen38-llama:ba5354d46
+    container_name: qwen-general
+    restart: unless-stopped
+
+    devices:
+      - /dev/dri:/dev/dri
+
+    security_opt:
+      - seccomp=unconfined
+
+    environment:
+      AMD_VULKAN_ICD: RADV
+      VK_LOADER_DEBUG: error
+
+    volumes:
+      - /srv/ai/models/qwen3.8-flash-next:/models:ro
+      - /srv/ai/secrets/qwen-general-api-key:/run/secrets/qwen_api_key:ro
+
+    ports:
+      - "192.168.1.6:8081:8080"
+
+    stop_grace_period: 60s
+
+    command:
+      - -m
+      - /models/trunk-q5k-00001-of-00003.gguf
+      - -md
+      - /models/mtp-Qwen3.8-Flash-Next-Q5_K-frspec-65k.gguf
+      - --mmproj
+      - /models/mmproj-BF16.gguf
+      - --spec-type
+      - draft-mtp
+      - --spec-draft-n-max
+      - "3"
+      - --spec-draft-p-min
+      - "0.0"
+      - -ngl
+      - "999"
+      - -fa
+      - "1"
+      - -ub
+      - "2048"
+      - -b
+      - "2048"
+      - -c
+      - "262144"
+      - -np
+      - "2"
+      - -lm
+      - dio
+      - --jinja
+      - --host
+      - "0.0.0.0"
+      - --port
+      - "8080"
+      - --alias
+      - qwen3.8-flash-next
+      - --api-key-file
+      - /run/secrets/qwen_api_key
