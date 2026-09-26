@@ -1,0 +1,67 @@
+# syntax=docker/dockerfile:1.7
+
+ARG UBUNTU_VERSION=26.04
+
+FROM ubuntu:${UBUNTU_VERSION} AS builder
+
+ARG DEBIAN_FRONTEND=noninteractive
+ARG LLAMA_REPO=https://github.com/drluoto/llama.cpp.git
+ARG LLAMA_BRANCH=strix-halo-vulkan
+ARG LLAMA_REF=ba5354d46ca63e8225c28e1331f0f7651723ad05
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    ca-certificates \
+    cmake \
+    git \
+    glslc \
+    libvulkan-dev \
+    ninja-build \
+    pkg-config \
+    spirv-headers \
+ && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+
+RUN git clone --single-branch --branch "${LLAMA_BRANCH}" "${LLAMA_REPO}" llama.cpp \
+ && cd llama.cpp \
+ && git checkout "${LLAMA_REF}" \
+ && test "$(git rev-parse HEAD)" = "${LLAMA_REF}" \
+ && git --no-pager log -1 --oneline
+
+WORKDIR /build/llama.cpp
+
+# Deliberately do not use GGML_NATIVE here. GitHub-hosted runners are not
+# Strix Halo machines; native CPU tuning would optimize for the runner CPU.
+RUN cmake -S . -B build -G Ninja \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DGGML_VULKAN=ON \
+      -DGGML_NATIVE=OFF \
+      -DLLAMA_CURL=OFF \
+ && cmake --build build \
+      --target llama-server \
+      --parallel "$(nproc)"
+
+FROM ubuntu:${UBUNTU_VERSION} AS runtime
+
+ARG DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    libgomp1 \
+    libvulkan1 \
+    mesa-vulkan-drivers \
+    vulkan-tools \
+ && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /build/llama.cpp/build/bin/llama-server /usr/local/bin/
+COPY --from=builder /build/llama.cpp/build/bin/*.so* /usr/local/lib/
+
+RUN ldconfig
+
+ENV AMD_VULKAN_ICD=RADV
+ENV VK_LOADER_DEBUG=error
+
+WORKDIR /models
+
+ENTRYPOINT ["/usr/local/bin/llama-server"]
