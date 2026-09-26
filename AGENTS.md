@@ -19,6 +19,7 @@ This repository builds reproducible inference runtime images and stores Portaine
 - Branch: `strix-halo-vulkan`
 - Commit: `ba5354d46ca63e8225c28e1331f0f7651723ad05`
 - GPU backend: Vulkan / RADV on AMD Radeon 8060S (Strix Halo)
+- Keep `GGML_VK_DISABLE_GDN_CACHE_FUSION=1`; this is part of the validated Strix Halo baseline
 - Model: Qwen3.8-Flash-Next AgenticRequant Q5_K
 - Draft: FR-Spec MTP Q5_K, 65K
 - Vision: BF16 mmproj
