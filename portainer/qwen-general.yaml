@@ -12,6 +12,7 @@ services:
 
     environment:
       AMD_VULKAN_ICD: RADV
+      GGML_VK_DISABLE_GDN_CACHE_FUSION: "1"
       VK_LOADER_DEBUG: error
 
     volumes:
