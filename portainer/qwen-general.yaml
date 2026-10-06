@@ -20,7 +20,7 @@ services:
       - /srv/ai/secrets/qwen-general-api-key:/run/secrets/qwen_api_key:ro
 
     ports:
-      - "192.168.1.6:8081:8080"
+      - "8081:8080"
 
     stop_grace_period: 60s
 
