@@ -15,14 +15,25 @@ This repository builds reproducible inference runtime images and stores Portaine
 
 ## Qwen 3.8 production baseline
 
+- Engine: `ggml-org/llama.cpp`
+- Branch: `master`
+- Commit: `23b0202a189c44a54625aadcb37a946dd1d6278d`
+- Temporary workaround: remove the obsolete Qwen4Exp MTP token-only assertion described in `ggml-org/llama.cpp#30307`
+- GPU backend: Vulkan / RADV on AMD Radeon 8060S (Strix Halo)
+- Model: Qwen3.8-Flash-Next AgenticRequant Q5_K
+- Draft: official full-vocabulary Q4_0 MTP
+- Vision: BF16 mmproj
+- Shared context: 262144 across 2 slots
+- Reasoning history: `--no-reasoning-preserve`
+- Image token allocation: projector/model default
+- Host model path: `/srv/ai/models/qwen3.8-flash-next`
+- Production host: `ai-brain-01`
+- Service endpoint: `192.168.1.27:8081`
+
+## Rollback baseline
+
+- Image: `ghcr.io/phikapjames/qwen38-llama:ba5354d46`
 - Engine: `drluoto/llama.cpp`
 - Branch: `strix-halo-vulkan`
 - Commit: `ba5354d46ca63e8225c28e1331f0f7651723ad05`
-- GPU backend: Vulkan / RADV on AMD Radeon 8060S (Strix Halo)
-- Keep `GGML_VK_DISABLE_GDN_CACHE_FUSION=1`; this is part of the validated Strix Halo baseline
-- Model: Qwen3.8-Flash-Next AgenticRequant Q5_K
 - Draft: FR-Spec MTP Q5_K, 65K
-- Vision: BF16 mmproj
-- Shared context: 262144 across 2 slots
-- Host model path: `/srv/ai/models/qwen3.8-flash-next`
-- Service endpoint: `192.168.1.6:8081`
