@@ -1,6 +1,7 @@
 services:
   qwen-general:
-    image: ghcr.io/phikapjames/qwen38-llama:ba5354d46
+    image: qwen38-llama:upstream-23b0202-visionfix
+    pull_policy: never
     container_name: qwen-general
     restart: unless-stopped
 
@@ -12,7 +13,6 @@ services:
 
     environment:
       AMD_VULKAN_ICD: RADV
-      GGML_VK_DISABLE_GDN_CACHE_FUSION: "1"
       VK_LOADER_DEBUG: error
 
     volumes:
@@ -28,7 +28,7 @@ services:
       - -m
       - /models/trunk-q5k-00001-of-00003.gguf
       - -md
-      - /models/mtp-Qwen3.8-Flash-Next-Q5_K-frspec-65k.gguf
+      - /models/mtp-Qwen3.8-Flash-Next-Q4_0.gguf
       - --mmproj
       - /models/mmproj-BF16.gguf
       - --spec-type
@@ -40,7 +40,7 @@ services:
       - -ngl
       - "999"
       - -fa
-      - "1"
+      - "on"
       - -ub
       - "2048"
       - -b
@@ -52,6 +52,7 @@ services:
       - -lm
       - dio
       - --jinja
+      - --no-reasoning-preserve
       - --host
       - "0.0.0.0"
       - --port
