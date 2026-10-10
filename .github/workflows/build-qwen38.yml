@@ -16,7 +16,7 @@ permissions:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: phikapjames/qwen38-llama
-  IMAGE_TAG: ba5354d46
+  IMAGE_TAG: 23b0202-visionfix
 
 jobs:
   build:
@@ -48,6 +48,6 @@ jobs:
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.description=Qwen 3.8 Flash-Next llama.cpp runtime for AMD Strix Halo Vulkan
+            org.opencontainers.image.description=Qwen 3.8 Flash-Next upstream llama.cpp runtime for AMD Strix Halo Vulkan
           cache-from: type=gha
           cache-to: type=gha,mode=max
