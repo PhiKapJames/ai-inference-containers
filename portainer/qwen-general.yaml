@@ -1,7 +1,7 @@
 services:
   qwen-general:
-    image: qwen38-llama:upstream-23b0202-visionfix
-    pull_policy: never
+    image: ghcr.io/phikapjames/qwen38-llama:upstream-23b0202-visionfix
+    pull_policy: always
     container_name: qwen-general
     restart: unless-stopped
 
