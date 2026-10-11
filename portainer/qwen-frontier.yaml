@@ -1,0 +1,78 @@
+services:
+  qwen-frontier:
+    image: qwen38-llama:upstream-23b0202-visionfix
+    pull_policy: never
+    container_name: qwen-frontier
+    restart: unless-stopped
+
+    devices:
+      - /dev/dri:/dev/dri
+
+    security_opt:
+      - seccomp=unconfined
+
+    environment:
+      AMD_VULKAN_ICD: RADV
+      VK_LOADER_DEBUG: error
+
+    volumes:
+      - /srv/ai/models/qwen3.8-flash-next:/models:ro
+      - /srv/ai/secrets/qwen-general-api-key:/run/secrets/qwen_api_key:ro
+
+    ports:
+      - "8082:8080"
+
+    stop_grace_period: 60s
+
+    command:
+      - -m
+      - /models/trunk-q5k-00001-of-00003.gguf
+
+      - -md
+      - /models/mtp-Qwen3.8-Flash-Next-Q4_0.gguf
+
+      - --spec-type
+      - draft-mtp
+
+      - --spec-draft-n-max
+      - "3"
+
+      - --spec-draft-p-min
+      - "0.0"
+
+      - -ngl
+      - "999"
+
+      - -fa
+      - "on"
+
+      - -ub
+      - "2048"
+
+      - -b
+      - "2048"
+
+      - -c
+      - "262144"
+
+      - -np
+      - "1"
+
+      - -lm
+      - dio
+
+      - --jinja
+
+      - --no-reasoning-preserve
+
+      - --host
+      - "0.0.0.0"
+
+      - --port
+      - "8080"
+
+      - --alias
+      - qwen3.8-flash-next-frontier
+
+      - --api-key-file
+      - /run/secrets/qwen_api_key
