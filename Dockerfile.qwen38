@@ -5,9 +5,8 @@ ARG UBUNTU_VERSION=26.04
 FROM ubuntu:${UBUNTU_VERSION} AS builder
 
 ARG DEBIAN_FRONTEND=noninteractive
-ARG LLAMA_REPO=https://github.com/drluoto/llama.cpp.git
-ARG LLAMA_BRANCH=strix-halo-vulkan
-ARG LLAMA_REF=ba5354d46ca63e8225c28e1331f0f7651723ad05
+ARG LLAMA_REPO=https://github.com/ggml-org/llama.cpp.git
+ARG LLAMA_REF=23b0202a189c44a54625aadcb37a946dd1d6278d
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
@@ -23,13 +22,22 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /build
 
-RUN git clone --single-branch --branch "${LLAMA_BRANCH}" "${LLAMA_REPO}" llama.cpp \
+RUN git clone "${LLAMA_REPO}" llama.cpp \
  && cd llama.cpp \
  && git checkout "${LLAMA_REF}" \
  && test "$(git rev-parse HEAD)" = "${LLAMA_REF}" \
  && git --no-pager log -1 --oneline
 
 WORKDIR /build/llama.cpp
+
+# Qwen3.8 Flash-Next native vision sends embeddings through the target graph.
+# At this pinned upstream revision, the Qwen4Exp MTP graph still contains an
+# obsolete token-only assertion even though the embeddings path is implemented.
+# Remove exactly that assertion and fail the build if the expected source line
+# is no longer present, so this patch cannot silently drift.
+RUN test "$(grep -Fc 'GGML_ASSERT(ubatch.token && "qwen4exp MTP requires token input");' src/models/qwen4exp.cpp)" = "1" \
+ && sed -i '/GGML_ASSERT(ubatch.token && "qwen4exp MTP requires token input");/d' src/models/qwen4exp.cpp \
+ && ! grep -Fq 'GGML_ASSERT(ubatch.token && "qwen4exp MTP requires token input");' src/models/qwen4exp.cpp
 
 # Deliberately do not use GGML_NATIVE here. GitHub-hosted runners are not
 # Strix Halo machines; native CPU tuning would optimize for the runner CPU.
@@ -60,7 +68,6 @@ COPY --from=builder /build/llama.cpp/build/bin/*.so* /usr/local/lib/
 RUN ldconfig
 
 ENV AMD_VULKAN_ICD=RADV
-ENV GGML_VK_DISABLE_GDN_CACHE_FUSION=1
 ENV VK_LOADER_DEBUG=error
 
 WORKDIR /models
