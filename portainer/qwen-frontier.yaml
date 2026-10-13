@@ -27,8 +27,8 @@ services:
     command:
       - -m
       - /models/trunk-q5k-00001-of-00003.gguf
-      # Disable the draft model while isolating long-prompt Vulkan failures.
-      # Keep the full context and batch sizes for the initial stability test.
+      # MTP-off alone still failed during a real long OpenCode prompt.
+      # Keep the full context; test a smaller physical microbatch below.
       - --spec-type
       - none
       - -ngl
@@ -36,7 +36,7 @@ services:
       - -fa
       - "on"
       - -ub
-      - "2048"
+      - "512"
       - -b
       - "2048"
       - -c

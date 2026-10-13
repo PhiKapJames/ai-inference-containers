@@ -63,19 +63,24 @@ Use `portainer/qwen-frontier.yaml`.
 - full `262144` context
 - text-only
 - speculative decoding disabled; no draft model loaded
+- logical batch `2048`; physical microbatch `512` (candidate awaiting validation)
 - `--no-reasoning-preserve`
 
-MTP is disabled on Frontier to investigate repeated Vulkan GPU device-loss failures during long requests. It has passed the bounded synthetic native tests below and remains a stability mitigation under evaluation. These results do not establish overnight reliability or prove that MTP caused the earlier failures. The model, image reference, context size, slot count, batching and load mode are unchanged. Generation speed may change when speculative decoding is disabled.
+**Frontier is not yet qualified for overnight development.** MTP-off passed the bounded native tests below, but a later real OpenCode prompt triggered another GPU reset. Disabling MTP alone was insufficient.
+
+The next isolated candidate reduces `-ub` from `2048` to `512`, the pinned engine's default maximum physical batch size. The logical batch remains `2048`, context `262144`, one slot, MTP disabled, and the same model, image reference, flash-attention setting and load mode. Smaller physical batches may reduce temporary graph work and slow prompt processing; they do not reduce the configured context or establish a fix.
+
+Related [AMD Vulkan reports](https://github.com/ggml-org/llama.cpp/issues/20515) describe sensitivity to microbatch size and context depth, including failures at `512`. Another [Strix Halo report](https://github.com/ggml-org/llama.cpp/issues/27306#issuecomment-5378231906) reproduces device loss with MTP disabled and large batches. These use different models or revisions and support this experiment, not a guaranteed cure.
 
 After redeployment, confirm that no draft context is loaded, then test a cold long prompt and several continued tool calls. Record the actual model input tokens and output budget, completed responses, kernel GPU resets, memory/swap activity and client timeouts. A successful health check or short reply alone does not establish overnight stability.
 
 The stacks pull the GHCR image built from the pinned upstream commit instead of depending on a host-local Docker image.
 
-For the Git-managed `qwen-frontier` Portainer stack, use **Pull and redeploy** after the change is published to `main`. Confirm that the stack's Git commit advances and the recreated container uses `--spec-type none` without `-md`. Restarting the existing container alone does not apply the new command. This stack-only change does not rebuild the container image.
+For the Git-managed `qwen-frontier` Portainer stack, use **Pull and redeploy** after the change is published to `main`. Confirm that the stack's Git commit advances and the recreated container uses `--spec-type none` without `-md`, `-ub 512`, `-b 2048` and `-c 262144`. Restarting the existing container alone does not apply the new command. This stack-only change does not rebuild the container image.
 
 For the MTP comparison, record the running image ID or digest before and after redeployment. The existing `pull_policy: always` and mutable registry tag can fetch different image contents even when the image reference is unchanged. If the image changes, the result no longer isolates MTP alone.
 
-#### Bounded host validation — 2026-10-13
+#### Earlier bounded host validation — 2026-10-13, MTP-off with `-ub 2048`
 
 | Native request | Input tokens | Reused tokens (`timings.cache_n`) | Total time | Generated / limit |
 | --- | ---: | ---: | ---: | ---: |
@@ -89,6 +94,18 @@ Collected monitoring showed no GPU/OOM kernel matches, server PID change, or inc
 These tests used native `/completion` requests and synthetic records. They did not demonstrate actual tool calls, large-context requests through OpenCode, or overnight/multi-day endurance. Those checks remain outstanding. Native prompt-progress events kept the test connections active; they do not demonstrate client tolerance of a long silent prompt-processing interval.
 
 Running image IDs or digests were not recorded before and after redeployment, so the observations cannot isolate MTP as the cause of the earlier failures.
+
+#### Subsequent real-workload failure — 2026-10-13
+
+At `23:32:56 UTC` (`19:32:56 America/New_York`), the kernel reported an AMDGPU `comp_1.1.0` ring timeout attributed to the same `llama-server` process that completed the tests above. The compute queue reset and the device recovered, but the server lost its Vulkan context and crashed. The supplied server log stopped prompt processing at `159725` tokens, with `truncated = 0`; the restarted process still used MTP-off, `-ub 2048`, `-b 2048` and the full `262144` context. Subsequent client requests encountered `Loading model` while the server initialized again.
+
+The observed swap-out counter did not increase and no kernel OOM event was recorded. This establishes a fresh GPU failure, not the particular faulty shader or a general context-size limit. The earlier synthetic passes remain valid observations but did not qualify this real cached-history request. The independent OpenCode HTTP timeout correction does not prevent GPU device loss.
+
+#### Acceptance for the `-ub 512` candidate
+
+After redeployment, record the actual command, build and image digest. Validate the failing conversation's input, template and tool-schema shape through the OpenAI-compatible/LiteLLM path, including cold prompt processing and subsequent prefix-cache transitions. Keep the assessment read-only and within the input/output budget; do not execute project implementation or hardware actions as an infrastructure test.
+
+Then exercise normal OpenCode tool-result continuations and sustained representative work. Record completed responses, prompt/generation timings, input/output/cache token counts, server restarts, kernel GPU faults and memory/swap activity. Any new device-loss event fails the candidate. A short health check, synthetic-marker reply or single passing long prompt is not overnight acceptance. Microbatch `512` has not yet been benchmarked on this deployment.
 
 ## First publish
 
