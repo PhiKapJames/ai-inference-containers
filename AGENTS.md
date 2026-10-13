@@ -13,16 +13,18 @@ This repository builds reproducible inference runtime images and stores Portaine
 - Do not change model quantization, context size, speculative-decoding settings, or Vulkan flags without benchmarking the change first.
 - Portainer stack files should reference prebuilt registry images rather than Compose `build:` directives for remote Agent environments.
 
-## Qwen 3.8 production baseline
+## Qwen 3.8 stack baseline
 
-- Engine: `drluoto/llama.cpp`
-- Branch: `strix-halo-vulkan`
-- Commit: `ba5354d46ca63e8225c28e1331f0f7651723ad05`
+- Engine: upstream `ggml-org/llama.cpp`
+- Commit: `23b0202a189c44a54625aadcb37a946dd1d6278d` (build 11552)
+- Image: `ghcr.io/phikapjames/qwen38-llama:upstream-23b0202-visionfix`
+- Local source patch: remove the obsolete Qwen4Exp MTP token-only assertion for native vision embeddings; see `Dockerfile.qwen38`
 - GPU backend: Vulkan / RADV on AMD Radeon 8060S (Strix Halo)
-- Keep `GGML_VK_DISABLE_GDN_CACHE_FUSION=1`; this is part of the validated Strix Halo baseline
-- Model: Qwen3.8-Flash-Next AgenticRequant Q5_K
-- Draft: FR-Spec MTP Q5_K, 65K
-- Vision: BF16 mmproj
-- Shared context: 262144 across 2 slots
+- Model: Qwen3.8-Flash-Next, existing split `trunk-q5k` weights
+- ai-brain-01: official Q4_0 MTP draft and BF16 vision projector, 262144 total context across two 131072-token slots
+- ai-brain-02: text-only, speculative decoding disabled and no draft model loaded, full 262144 context in one slot
+- Frontier MTP-off is a stability candidate awaiting long-prompt and continued-tool-call validation on the host; do not claim GPU stability from configuration parsing or health checks
+- Both stacks keep `--no-reasoning-preserve`; preserve existing batching and DirectIO load mode during the initial Frontier comparison
 - Host model path: `/srv/ai/models/qwen3.8-flash-next`
-- Service endpoint: `192.168.1.6:8081`
+- Endpoints and deployment commands: see `README.md` and the files under `portainer/`
+- The former `drluoto/llama.cpp` `ba5354d46` runtime is a rollback reference, not the current stack baseline

@@ -37,7 +37,7 @@ Both Strix Halo hosts use:
 /srv/ai/secrets/qwen-general-api-key
 ```
 
-The projector is required only by the vision-enabled `qwen-general` stack.
+The MTP sidecar and projector are loaded only by the vision-enabled `qwen-general` stack. These files can remain stored on both hosts; the Frontier stack does not load them.
 
 ## Portainer
 
@@ -62,10 +62,18 @@ Use `portainer/qwen-frontier.yaml`.
 - one slot
 - full `262144` context
 - text-only
-- official Q4_0 MTP draft model
+- speculative decoding disabled; no draft model loaded
 - `--no-reasoning-preserve`
 
-The stacks pull the pinned GHCR image instead of depending on a host-local Docker image.
+MTP is disabled on Frontier to isolate repeated Vulkan GPU device-loss failures during long requests. This is a stability candidate awaiting host validation, not a demonstrated cure. The model, image reference, context size, slot count, batching and load mode are unchanged. Generation speed may change when speculative decoding is disabled.
+
+After redeployment, confirm that no draft context is loaded, then test a cold long prompt and several continued tool calls. Record the actual model input tokens and output budget, completed responses, kernel GPU resets, memory/swap activity and client timeouts. A successful health check or short reply alone does not establish overnight stability.
+
+The stacks pull the GHCR image built from the pinned upstream commit instead of depending on a host-local Docker image.
+
+For the Git-managed `qwen-frontier` Portainer stack, use **Pull and redeploy** after the change is published to `main`. Confirm that the stack's Git commit advances and the recreated container uses `--spec-type none` without `-md`. Restarting the existing container alone does not apply the new command. This stack-only change does not rebuild the container image.
+
+For the MTP comparison, record the running image ID or digest before and after redeployment. The existing `pull_policy: always` and mutable registry tag can fetch different image contents even when the image reference is unchanged. If the image changes, the result no longer isolates MTP alone.
 
 ## First publish
 
