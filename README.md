@@ -65,7 +65,7 @@ Use `portainer/qwen-frontier.yaml`.
 - speculative decoding disabled; no draft model loaded
 - `--no-reasoning-preserve`
 
-MTP is disabled on Frontier to isolate repeated Vulkan GPU device-loss failures during long requests. This is a stability candidate awaiting host validation, not a demonstrated cure. The model, image reference, context size, slot count, batching and load mode are unchanged. Generation speed may change when speculative decoding is disabled.
+MTP is disabled on Frontier to investigate repeated Vulkan GPU device-loss failures during long requests. It has passed the bounded synthetic native tests below and remains a stability mitigation under evaluation. These results do not establish overnight reliability or prove that MTP caused the earlier failures. The model, image reference, context size, slot count, batching and load mode are unchanged. Generation speed may change when speculative decoding is disabled.
 
 After redeployment, confirm that no draft context is loaded, then test a cold long prompt and several continued tool calls. Record the actual model input tokens and output budget, completed responses, kernel GPU resets, memory/swap activity and client timeouts. A successful health check or short reply alone does not establish overnight stability.
 
@@ -74,6 +74,21 @@ The stacks pull the GHCR image built from the pinned upstream commit instead of 
 For the Git-managed `qwen-frontier` Portainer stack, use **Pull and redeploy** after the change is published to `main`. Confirm that the stack's Git commit advances and the recreated container uses `--spec-type none` without `-md`. Restarting the existing container alone does not apply the new command. This stack-only change does not rebuild the container image.
 
 For the MTP comparison, record the running image ID or digest before and after redeployment. The existing `pull_policy: always` and mutable registry tag can fetch different image contents even when the image reference is unchanged. If the image changes, the result no longer isolates MTP alone.
+
+#### Bounded host validation — 2026-10-13
+
+| Native request | Input tokens | Reused tokens (`timings.cache_n`) | Total time | Generated / limit |
+| --- | ---: | ---: | ---: | ---: |
+| Cold prompt | 190,007 | 0 | 23m 29s | 170 / 768 |
+| Cached-prefix extension | 224,993 | 190,309 | 5m 23s | 181 / 768 |
+
+Both responses ended on EOS without truncation and passed synthetic-marker checks. Six short cached continuations completed in 1.43–2.34 seconds, generating 17 tokens each within a 128-token limit. The 225K request extended an existing cached conversation; it was not a cold 225K test. Observed generation was approximately 21 tokens/second; the table includes prompt-processing time.
+
+Collected monitoring showed no GPU/OOM kernel matches, server PID change, or increase in swap-out activity during these tests and the subsequent short proxy check. A short streaming request through the LiteLLM Frontier route also returned HTTP 200. The API reported build `b11552-23b0202a1`, one slot and the full 262144-token context.
+
+These tests used native `/completion` requests and synthetic records. They did not demonstrate actual tool calls, large-context requests through OpenCode, or overnight/multi-day endurance. Those checks remain outstanding. Native prompt-progress events kept the test connections active; they do not demonstrate client tolerance of a long silent prompt-processing interval.
+
+Running image IDs or digests were not recorded before and after redeployment, so the observations cannot isolate MTP as the cause of the earlier failures.
 
 ## First publish
 

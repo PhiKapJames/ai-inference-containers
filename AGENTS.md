@@ -23,7 +23,7 @@ This repository builds reproducible inference runtime images and stores Portaine
 - Model: Qwen3.8-Flash-Next, existing split `trunk-q5k` weights
 - ai-brain-01: official Q4_0 MTP draft and BF16 vision projector, 262144 total context across two 131072-token slots
 - ai-brain-02: text-only, speculative decoding disabled and no draft model loaded, full 262144 context in one slot
-- Frontier MTP-off is a stability candidate awaiting long-prompt and continued-tool-call validation on the host; do not claim GPU stability from configuration parsing or health checks
+- Frontier MTP-off passed the bounded synthetic native checks documented in README.md. Large-context OpenCode integration, actual tool-call sequences, and overnight/multi-day endurance remain unvalidated. Keep claims limited to the observed requests; configuration parsing, health checks, and short proxy replies do not establish end-to-end stability.
 - Both stacks keep `--no-reasoning-preserve`; preserve existing batching and DirectIO load mode during the initial Frontier comparison
 - Host model path: `/srv/ai/models/qwen3.8-flash-next`
 - Endpoints and deployment commands: see `README.md` and the files under `portainer/`
