@@ -21,7 +21,7 @@ This repository builds reproducible inference runtime images and stores Portaine
 - Local source patch: remove the obsolete Qwen4Exp MTP token-only assertion for native vision embeddings; see `Dockerfile.qwen38`
 - GPU backend: Vulkan / RADV on AMD Radeon 8060S (Strix Halo)
 - Model: Qwen3.8-Flash-Next, existing split `trunk-q5k` weights
-- ai-brain-01: official Q4_0 MTP draft and BF16 vision projector, 262144 total context across two 131072-token slots
+- ai-brain-01: official Q4_0 MTP draft and BF16 vision projector, 524288 total context across two 262144-token slots; Q8_0 K/V cache for the target model, unchanged FP16 draft cache, logical batch 2048 and physical microbatch 512. See the dated bounded validation in README.md; it does not establish full-window or overnight stability.
 - ai-brain-02: text-only, speculative decoding disabled and no draft model loaded, full 262144 context in one slot; logical batch 2048 and physical microbatch 512 as the next unvalidated candidate
 - Frontier MTP-off with physical microbatch 2048 passed bounded synthetic native checks but subsequently failed during a real OpenCode prompt at 23:32:56 UTC on 2026-10-13. It is not qualified for overnight development. Keep the passing observations and the later failure in README.md; do not treat the synthetic tests as end-to-end stability evidence.
 - Benchmark physical microbatch 512 against the failing request shape, cache transitions and ordinary OpenCode tool continuations before qualifying it. Preserve the other Frontier runtime settings for this comparison; do not promise that smaller microbatches cure device loss.

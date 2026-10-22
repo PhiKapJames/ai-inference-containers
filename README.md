@@ -48,10 +48,32 @@ Use `portainer/qwen-general.yaml`.
 - host: `192.168.1.27`
 - API: `8081`
 - two slots
-- `262144` total context, `131072` per slot
+- `524288` total context, `262144` per slot (input and output combined)
+- Q8_0 target K/V cache; the draft K/V cache remains FP16
+- logical batch `2048`; physical microbatch `512`
 - native vision enabled
 - official Q4_0 MTP draft model
 - `--no-reasoning-preserve`
+
+#### Bounded ai-brain-01 validation — 2026-10-22
+
+The target K/V cache changes from FP16 to Q8_0, the shared context from `262144` to `524288`, and the physical microbatch from `2048` to `512`. Two slots, logical batch `2048`, model weights, native vision, MTP settings and the FP16 draft cache are preserved. The tested image ID is `sha256:40292e60060df51383f0ece220ee92e1f5465c4ddc480105d428dcda5e586e9f`; deployment must retain these image contents.
+
+The existing FP16 service and the Q8 candidate both passed the same 13,049-token three-marker retrieval, order-preserving Python deduplication, red/blue image recognition, function-call and tool-result continuation fixtures. The baseline was serving other traffic, so these observations do not isolate a Q8 speed or quality difference.
+
+The Q8 candidate additionally passed the following synthetic OpenAI-compatible chat requests, with native vision and MTP enabled:
+
+| Request | Input tokens | Reused input tokens | Total time | Result |
+| --- | ---: | ---: | ---: | --- |
+| Cold long conversation with image | 140,115 | 0 | 617.18 s | Exact expected markers |
+| Concurrent second request | 13,049 | 0 | 612.68 s | Exact expected markers |
+| Cached continuation of long conversation | 140,166 | 140,111 | 1.66 s | Exact expected markers |
+
+Both slots were observed processing at the same time. The smaller concurrent request still waited behind the large prefill; two slots do not establish independent low latency. The cold long request took roughly ten minutes before completing, whereas its cached continuation completed in under two seconds.
+
+Minimum sampled available system RAM across these long tests was 14.72 GiB. There were no new swap-outs, kernel GPU reset/fault matches, or OOM events during the long tests. These are bounded synthetic checks, not validation of a cold full-262K prompt, arbitrary real project/tool-history shapes, or overnight/multi-day operation.
+
+The LiteLLM capacity metadata for the ai-brain-01 deployment and its aliases must be updated to `max_input_tokens: 262144` after deployment. This advertises the total backend window; a request still needs room for its generated answer. The automatic `openwebui` router also includes the smaller `general` route, so its derived safe window can remain below the direct `heavy`/`coding` window.
 
 ### ai-brain-02 — frontier/design
 
