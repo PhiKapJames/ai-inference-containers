@@ -25,6 +25,7 @@ services:
     stop_grace_period: 60s
 
     command:
+      - --metrics
       - -m
       - /models/trunk-q5k-00001-of-00003.gguf
       # MTP-off alone still failed during a real long OpenCode prompt.
