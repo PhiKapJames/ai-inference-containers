@@ -16,7 +16,7 @@ services:
       VK_LOADER_DEBUG: error
 
     volumes:
-      - /srv/ai/models/qwen3.8-flash-next:/models:ro
+      - /srv/ai/models/qwen3.8-flash-next-unsloth-iq4xs-v31:/models:ro
       - /srv/ai/secrets/qwen-general-api-key:/run/secrets/qwen_api_key:ro
 
     ports:
@@ -27,7 +27,7 @@ services:
     command:
       - --metrics
       - -m
-      - /models/trunk-q5k-00001-of-00003.gguf
+      - /models/Qwen3.8-Flash-Next-UD-IQ4_XS-00001-of-00004.gguf
       # MTP-off alone still failed during a real long OpenCode prompt.
       # Keep the full context; test a smaller physical microbatch below.
       - --spec-type
