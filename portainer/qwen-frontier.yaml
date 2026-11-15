@@ -17,6 +17,7 @@ services:
 
     volumes:
       - /srv/ai/models/qwen3.8-flash-next-unsloth-iq4xs-v31:/models:ro
+      - /srv/ai/models/qwen3.8-flash-next/mmproj-BF16.gguf:/vision/mmproj-BF16.gguf:ro
       - /srv/ai/secrets/qwen-general-api-key:/run/secrets/qwen_api_key:ro
 
     ports:
@@ -30,6 +31,8 @@ services:
       - /models/Qwen3.8-Flash-Next-UD-IQ4_XS-00001-of-00004.gguf
       # Two 262144-token slots share the context pool.
       # Q8 K/V controls cache memory while retaining the per-request window.
+      - --mmproj
+      - /vision/mmproj-BF16.gguf
       - --spec-type
       - none
       - -ngl

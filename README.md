@@ -85,13 +85,13 @@ Use `portainer/qwen-frontier.yaml`.
 - `524288` total context, `262144` per slot (input and output combined)
 - Q8_0 K/V cache
 - Qwen3.8 Flash Next UD-IQ4_XS weights from `/srv/ai/models/qwen3.8-flash-next-unsloth-iq4xs-v31`
-- text-only
+- native vision with the existing BF16 projector mounted read-only from `/srv/ai/models/qwen3.8-flash-next/mmproj-BF16.gguf`
 - speculative decoding disabled; no draft model loaded
 - logical batch `2048`; physical microbatch `512`
 - `--no-reasoning-preserve`
 - runtime pinned to `ghcr.io/phikapjames/qwen38-llama@sha256:40292e60060df51383f0ece220ee92e1f5465c4ddc480105d428dcda5e586e9f`
 
-For the Git-managed stack, use **Pull and redeploy** after publishing to `main`. Confirm the stack commit, pinned image digest, `-c 524288`, `-np 2`, `-ctk q8_0`, `-ctv q8_0`, and two API slots of 262144 tokens. The stack definition uses the prebuilt runtime image.
+For the Git-managed stack, use **Pull and redeploy** after publishing to `main`. Confirm the stack commit, pinned image digest, `-c 524288`, `-np 2`, `-ctk q8_0`, `-ctv q8_0`, `--mmproj /vision/mmproj-BF16.gguf`, and two API slots of 262144 tokens with vision enabled. The stack definition uses the prebuilt runtime image.
 
 #### Bounded two-slot validation — 2026-11-15
 
@@ -107,6 +107,19 @@ The existing one-slot FP16 service passed the initial short-response check. The 
 Both slots were observed active. The engine processed the large prefills in sequence, and Designer generation progressed slowly while Coder prefilled. Cached continuations reused 130266 and 195819 input tokens respectively. Established OpenCode Coder and Designer input/output allowances fit the 262144-token per-slot window.
 
 Minimum sampled available RAM was 14.04 GiB. Host swap-out counters rose by approximately 49.67 MiB across the test, with kernel GPU/OOM matches and container restarts both zero. This validation covered bounded synthetic API requests, tool-result/cache transitions and approximately 25 minutes of concurrent load. Endurance qualification requires sustained representative workloads.
+
+#### Bounded vision and two-slot validation — 2026-11-15
+
+The existing BF16 vision projector reports a 2560-dimensional projection matching the IQ4_XS language model. The candidate adds its read-only file mount and `--mmproj` while using the validated two-slot Q8 configuration. Two concurrent image checks correctly recognized red/blue panels labeled 17/42 and green/orange panels labeled 3/8. The same images were included at the start of the long requests below. Both long replies returned the correct colors, numbers and three distant text markers, with the required function call or structured JSON.
+
+| Request | Input tokens | Output allowance | Generated tokens | Total time | Reused input tokens |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Concurrent Coder with image | 129098 | 24576 | 139 | 1441.663 s | 0 |
+| Concurrent Designer with image | 194637 | 32768 | 103 | 1444.603 s | 0 |
+| Cached Coder with image | 129271 | 256 | 12 | 2.705 s | 129094 |
+| Cached Designer with image | 194760 | 256 | 18 | 2.824 s | 194633 |
+
+Minimum sampled available RAM was 15.25 GiB. Host swap-out counters rose by approximately 50.29 MiB, with kernel GPU/OOM matches and container restarts both zero. The concurrent cold run took approximately 24 minutes; image-bearing cached continuations completed in under three seconds. This bounded validation used deterministic 512-by-256 color/number fixtures and the established Coder/Designer input budgets. Requests specified the listed output allowances and generated short validation responses. A restricted OpenCode key also passed image input plus a required function call through LiteLLM’s `design` alias in 6.013 seconds, followed by a cached JSON tool-result continuation in 1.343 seconds. Both responses identified ai-brain-02 as the serving endpoint.
 
 #### Historical one-slot tuning — October 2026
 
