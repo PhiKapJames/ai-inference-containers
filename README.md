@@ -24,7 +24,7 @@ The former `drluoto/llama.cpp` `ba5354d46` image remains a rollback reference an
 
 ## Host model files
 
-Both Strix Halo hosts use:
+The general stack uses:
 
 ```text
 /srv/ai/models/qwen3.8-flash-next/
@@ -37,7 +37,7 @@ Both Strix Halo hosts use:
 /srv/ai/secrets/qwen-general-api-key
 ```
 
-The MTP sidecar and projector are loaded only by the vision-enabled `qwen-general` stack. These files can remain stored on both hosts; the Frontier stack does not load them.
+Both stacks load the matching Q4_0 MTP sidecar and BF16 vision projector. Frontier mounts these files separately from its UD-IQ4_XS language-model directory.
 
 ## Portainer
 
@@ -86,12 +86,12 @@ Use `portainer/qwen-frontier.yaml`.
 - Q8_0 K/V cache
 - Qwen3.8 Flash Next UD-IQ4_XS weights from `/srv/ai/models/qwen3.8-flash-next-unsloth-iq4xs-v31`
 - native vision with the existing BF16 projector mounted read-only from `/srv/ai/models/qwen3.8-flash-next/mmproj-BF16.gguf`
-- speculative decoding disabled; no draft model loaded
+- Q4_0 MTP draft mounted read-only from `/srv/ai/models/qwen3.8-flash-next/mtp-Qwen3.8-Flash-Next-Q4_0.gguf`; `--spec-type draft-mtp --spec-draft-n-max 3 --spec-draft-p-min 0.0`, with the default FP16 draft cache
 - logical batch `2048`; physical microbatch `512`
 - `--no-reasoning-preserve`
 - runtime pinned to `ghcr.io/phikapjames/qwen38-llama@sha256:40292e60060df51383f0ece220ee92e1f5465c4ddc480105d428dcda5e586e9f`
 
-For the Git-managed stack, use **Pull and redeploy** after publishing to `main`. Confirm the stack commit, pinned image digest, `-c 524288`, `-np 2`, `-ctk q8_0`, `-ctv q8_0`, `--mmproj /vision/mmproj-BF16.gguf`, and two API slots of 262144 tokens with vision enabled. The stack definition uses the prebuilt runtime image.
+For the Git-managed stack, use **Pull and redeploy** after publishing to `main`. Confirm the stack commit, pinned image digest, `-c 524288`, `-np 2`, `-ctk q8_0`, `-ctv q8_0`, `--mmproj /vision/mmproj-BF16.gguf`, `-md /draft/mtp-Qwen3.8-Flash-Next-Q4_0.gguf`, `--spec-type draft-mtp`, `--spec-draft-n-max 3`, `--spec-draft-p-min 0.0`, and two API slots of 262144 tokens with vision and speculation enabled. The stack definition uses the prebuilt runtime image.
 
 #### Bounded two-slot validation — 2026-11-15
 
@@ -120,6 +120,30 @@ The existing BF16 vision projector reports a 2560-dimensional projection matchin
 | Cached Designer with image | 194760 | 256 | 18 | 2.824 s | 194633 |
 
 Minimum sampled available RAM was 15.25 GiB. Host swap-out counters rose by approximately 50.29 MiB, with kernel GPU/OOM matches and container restarts both zero. The concurrent cold run took approximately 24 minutes; image-bearing cached continuations completed in under three seconds. This bounded validation used deterministic 512-by-256 color/number fixtures and the established Coder/Designer input budgets. Requests specified the listed output allowances and generated short validation responses. A restricted OpenCode key also passed image input plus a required function call through LiteLLM’s `design` alias in 6.013 seconds, followed by a cached JSON tool-result continuation in 1.343 seconds. Both responses identified ai-brain-02 as the serving endpoint.
+
+#### Bounded MTP comparison — 2026-11-15
+
+MTP was re-enabled with the existing Q4_0 sidecar, three draft tokens and minimum probability 0.0. The image ID remained `sha256:40292e60060df51383f0ece220ee92e1f5465c4ddc480105d428dcda5e586e9f` for the off/on comparison. The IQ4_XS target weights, vision projector, two 262144-token slots, Q8 target cache, logical batch 2048 and physical microbatch 512 were retained.
+
+Three short greedy fixtures used thinking disabled, a 24-token warm-up and a 768-token output limit. Client-observed generation rates exclude time to first token:
+
+| Fixture | MTP off, tokens/s | MTP on, tokens/s | Rate ratio |
+| --- | ---: | ---: | ---: |
+| sequence_json | 28.54 | 58.63 | 2.05x |
+| python_module | 28.54 | 56.31 | 1.97x |
+| design_json | 28.40 | 51.21 | 1.80x |
+
+All short fixture assertions passed. The integer-sequence output was identical, and the Python function bodies had identical syntax trees. Example assertions and design prose differed, so this is not a claim of byte-identical output or general quality equivalence. These short rates do not measure large cold-prefill performance.
+
+Two image-bearing requests then ran together, each with a 196608-token input ceiling and 32768-token output allowance. Coder used 194655 input tokens and generated 249 tokens; native server time was 1621.593 seconds. Designer used 194637 input tokens and generated 103 tokens in 2051.152 seconds. Both returned the exact image colors/numbers and all three distant text markers, with the required function call or structured JSON.
+
+**The original long test did not pass every assertion.** Coder returned a precomputed list of integers 0 through 30 in `fix`, instead of the requested literal expression `sorted(set(values))`. A cached replay repeated this miss. The same original Coder request was then run with MTP disabled, using the same model, image, vision and slot configuration. It also returned the precomputed list, in 874.357 seconds. This miss is not unique to MTP; this single control does not establish general quality equivalence or isolate cold-prefill speed, since the control ran alone. Excluding time to first token, the same 249-token reply yielded approximately 22.87 tokens/s with MTP off and 32.16 tokens/s on the MTP-enabled cached replay. Those rates describe isolated generation at this context depth, not concurrent cold-prefill throughput.
+
+An explicit tool-result correction with MTP enabled returned the required expression and preserved all image and marker fields in 7.205 seconds. The subsequent image-bearing Coder JSON/tool-result continuation completed in 2.210 seconds with 194978 cached input tokens. Designer's image-bearing JSON continuation completed in 3.360 seconds with 194633 cached input tokens.
+
+Minimum sampled available RAM during the concurrent MTP run was 12.91 GiB. Host swap-out counters rose by 3.41 GiB. Kernel GPU/OOM matches, runtime device-loss/assertion matches and container restarts were zero. Both slots reported speculation enabled and accepted draft tokens were observed. The concurrent cold run took about 34 minutes, exceeding the existing 30-minute OpenCode request timeout. Prefills progressed in sequence, and the other slot's generation slowed while a large prefill ran. No client context limits or timeouts were changed.
+
+A restricted OpenCode key passed image input with a streamed required function call and a streamed JSON tool-result continuation through LiteLLM's existing `design` alias after MTP was restored. These bounded fixtures do not qualify arbitrary real project histories, full-window output generation or overnight operation. The recorded instruction miss and cold-start timeout exposure should remain visible when assessing a larger shared pool.
 
 #### Historical one-slot tuning — October 2026
 
@@ -162,7 +186,7 @@ The observed swap-out counter did not increase and no kernel OOM event was recor
 
 After redeployment, record the actual command, build and image digest. Validate the failing conversation's input, template and tool-schema shape through the OpenAI-compatible/LiteLLM path, including cold prompt processing and subsequent prefix-cache transitions. Keep the assessment read-only and within the input/output budget; do not execute project implementation or hardware actions as an infrastructure test.
 
-Then exercise normal OpenCode tool-result continuations and sustained representative work. Record completed responses, prompt/generation timings, input/output/cache token counts, server restarts, kernel GPU faults and memory/swap activity. Any new device-loss event fails the candidate. A short health check, synthetic-marker reply or single passing long prompt is not overnight acceptance. Microbatch `512` has not yet been benchmarked on this deployment.
+Then exercise normal OpenCode tool-result continuations and sustained representative work. Record completed responses, prompt/generation timings, input/output/cache token counts, server restarts, kernel GPU faults and memory/swap activity. Any new device-loss event fails the candidate. A short health check, synthetic-marker reply or single passing long prompt is not overnight acceptance. At that stage, microbatch `512` had not yet been benchmarked on this deployment; the later bounded checks above extend validation without establishing overnight acceptance.
 
 ## First publish
 
