@@ -81,12 +81,34 @@ Use `portainer/qwen-frontier.yaml`.
 
 - host: `192.168.1.28`
 - API: `8082`
-- one slot
-- full `262144` context
+- two slots
+- `524288` total context, `262144` per slot (input and output combined)
+- Q8_0 K/V cache
+- Qwen3.8 Flash Next UD-IQ4_XS weights from `/srv/ai/models/qwen3.8-flash-next-unsloth-iq4xs-v31`
 - text-only
 - speculative decoding disabled; no draft model loaded
-- logical batch `2048`; physical microbatch `512` (candidate awaiting validation)
+- logical batch `2048`; physical microbatch `512`
 - `--no-reasoning-preserve`
+- runtime pinned to `ghcr.io/phikapjames/qwen38-llama@sha256:40292e60060df51383f0ece220ee92e1f5465c4ddc480105d428dcda5e586e9f`
+
+For the Git-managed stack, use **Pull and redeploy** after publishing to `main`. Confirm the stack commit, pinned image digest, `-c 524288`, `-np 2`, `-ctk q8_0`, `-ctv q8_0`, and two API slots of 262144 tokens. The stack definition uses the prebuilt runtime image.
+
+#### Bounded two-slot validation — 2026-11-15
+
+The existing one-slot FP16 service passed the initial short-response check. The candidate used the same runtime image and IQ4_XS weights with two full-size slots and Q8 K/V. Streaming, a required function call and its JSON tool-result continuation passed through the OpenAI-compatible API. The two long requests below ran together and returned the exact three context markers. Coder also returned the required code-review function call, and Designer returned the required structured JSON.
+
+| Request | Input tokens | Output allowance | Generated tokens | Total time | First token |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Concurrent Coder | 130270 | 24576 | 85 | 1459.451 s | 1455.675 s |
+| Concurrent Designer | 195823 | 32768 | 67 | 1455.364 s | 875.239 s |
+| Cached Coder continuation | 130389 | 256 | 12 | 2.589 s | 2.031 s |
+| Cached Designer continuation | 195910 | 256 | 18 | 2.750 s | 1.877 s |
+
+Both slots were observed active. The engine processed the large prefills in sequence, and Designer generation progressed slowly while Coder prefilled. Cached continuations reused 130266 and 195819 input tokens respectively. Established OpenCode Coder and Designer input/output allowances fit the 262144-token per-slot window.
+
+Minimum sampled available RAM was 14.04 GiB. Host swap-out counters rose by approximately 49.67 MiB across the test, with kernel GPU/OOM matches and container restarts both zero. This validation covered bounded synthetic API requests, tool-result/cache transitions and approximately 25 minutes of concurrent load. Endurance qualification requires sustained representative workloads.
+
+#### Historical one-slot tuning — October 2026
 
 **Frontier is not yet qualified for overnight development.** MTP-off passed the bounded native tests below, but a later real OpenCode prompt triggered another GPU reset. Disabling MTP alone was insufficient.
 

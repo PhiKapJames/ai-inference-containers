@@ -1,6 +1,6 @@
 services:
   qwen-frontier:
-    image: ghcr.io/phikapjames/qwen38-llama:upstream-23b0202-visionfix
+    image: ghcr.io/phikapjames/qwen38-llama@sha256:40292e60060df51383f0ece220ee92e1f5465c4ddc480105d428dcda5e586e9f
     pull_policy: always
     container_name: qwen-frontier
     restart: unless-stopped
@@ -28,8 +28,8 @@ services:
       - --metrics
       - -m
       - /models/Qwen3.8-Flash-Next-UD-IQ4_XS-00001-of-00004.gguf
-      # MTP-off alone still failed during a real long OpenCode prompt.
-      # Keep the full context; test a smaller physical microbatch below.
+      # Two 262144-token slots share the context pool.
+      # Q8 K/V controls cache memory while retaining the per-request window.
       - --spec-type
       - none
       - -ngl
@@ -40,10 +40,14 @@ services:
       - "512"
       - -b
       - "2048"
+      - -ctk
+      - q8_0
+      - -ctv
+      - q8_0
       - -c
-      - "262144"
+      - "524288"
       - -np
-      - "1"
+      - "2"
       - -lm
       - dio
       - --jinja
