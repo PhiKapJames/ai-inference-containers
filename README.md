@@ -24,20 +24,26 @@ The former `drluoto/llama.cpp` `ba5354d46` image remains a rollback reference an
 
 ## Host model files
 
-The general stack uses:
+Both stacks use the same four UD-IQ4_XS language-model shards, Q4_0 MTP draft and BF16 vision projector. The four main shards total 93,672,359,738 bytes and have matching SHA256 hashes on both hosts. The previous trunk-q5k package totaled 92,329,675,424 bytes; these mixed-precision packages should not be compared by the short quantization labels alone.
 
 ```text
+/srv/ai/models/qwen3.8-flash-next-unsloth-iq4xs-v31/
+  Qwen3.8-Flash-Next-UD-IQ4_XS-00001-of-00004.gguf
+  Qwen3.8-Flash-Next-UD-IQ4_XS-00002-of-00004.gguf
+  Qwen3.8-Flash-Next-UD-IQ4_XS-00003-of-00004.gguf
+  Qwen3.8-Flash-Next-UD-IQ4_XS-00004-of-00004.gguf
+
 /srv/ai/models/qwen3.8-flash-next/
-  trunk-q5k-00001-of-00003.gguf
-  trunk-q5k-00002-of-00003.gguf
-  trunk-q5k-00003-of-00003.gguf
   mtp-Qwen3.8-Flash-Next-Q4_0.gguf
   mmproj-BF16.gguf
+  trunk-q5k-00001-of-00003.gguf  # retained on 01 for rollback
+  trunk-q5k-00002-of-00003.gguf
+  trunk-q5k-00003-of-00003.gguf
 
 /srv/ai/secrets/qwen-general-api-key
 ```
 
-Both stacks load the matching Q4_0 MTP sidecar and BF16 vision projector. Frontier mounts these files separately from its UD-IQ4_XS language-model directory.
+The language-model directory is mounted read-only at `/models`. The draft and projector have separate read-only mounts at `/draft` and `/vision`. No weights or credentials belong in this repository.
 
 ## Portainer
 
@@ -51,8 +57,9 @@ Use `portainer/qwen-general.yaml`.
 - `524288` total context, `262144` per slot (input and output combined)
 - Q8_0 target K/V cache; the draft K/V cache remains FP16
 - logical batch `2048`; physical microbatch `512`
+- Qwen3.8 Flash Next UD-IQ4_XS, matching ai-brain-02
 - native vision enabled
-- official Q4_0 MTP draft model
+- official Q4_0 MTP draft model; `draft-mtp`, maximum three draft tokens, minimum probability 0.0
 - `--no-reasoning-preserve`
 
 #### Bounded ai-brain-01 validation — 2026-10-22
@@ -73,7 +80,40 @@ Both slots were observed processing at the same time. The smaller concurrent req
 
 Minimum sampled available system RAM across these long tests was 14.72 GiB. There were no new swap-outs, kernel GPU reset/fault matches, or OOM events during the long tests. These are bounded synthetic checks, not validation of a cold full-262K prompt, arbitrary real project/tool-history shapes, or overnight/multi-day operation.
 
-The LiteLLM capacity metadata for the ai-brain-01 deployment and its aliases must be updated to `max_input_tokens: 262144` after deployment. This advertises the total backend window; a request still needs room for its generated answer. The automatic `openwebui` router also includes the smaller `general` route, so its derived safe window can remain below the direct `heavy`/`coding` window.
+The historical October cutover recommended LiteLLM `max_input_tokens: 262144`; the November migration below supersedes that metadata recommendation with separate input/output budgets. The backend window includes both prompt and answer. The historical automatic `openwebui` router also included the smaller `general` route, so its derived safe window could remain below the direct `heavy`/`coding` window.
+
+#### Matching ai-brain-02 package — 2026-11-15
+
+ai-brain-01 now uses the exact four-shard UD-IQ4_XS package already deployed on ai-brain-02. The Q4_0 draft and BF16 projector hashes match across hosts. Both use the same immutable image digest, two 262144-token slots, Q8 target K/V, default FP16 draft cache, MTP maximum three / minimum probability 0.0, logical batch 2048 and physical microbatch 512. Ports and native model names remain host-specific. No new engine image was built.
+
+The original container, image, command and canonical source were captured before cutover; its trunk weights and pinned rollback definition remain on 01. Model files were verified against source SHA256 hashes during transfer and again from destination disk. The Compose project remains `ai-inference-containers`; Portainer uses `portainer/qwen-general.yaml`.
+
+Short greedy fixtures used thinking disabled, a 24-token warm-up and a 768-token response limit. Client-observed decode rates exclude time to first token:
+
+| Fixture | Original trunk-q5k, tokens/s | Matching UD-IQ4_XS, tokens/s |
+| --- | ---: | ---: |
+| sequence_json | 61.15 | 58.99 |
+| python_module | 59.29 | 56.72 |
+| design_json | 52.66 | 51.27 |
+
+All three short assertions and the same twelve functional Python fixtures outside the generated examples passed for both packages. The fixture set covers stable deduplication order, inclusive interval overlap/touching and group counts; it does not establish broad coding quality equivalence. The matching package was about 3–4% slower on these short fixtures. The original process had run since October 27, whereas the matching process was freshly started, so memory and timing differences are not an isolated quantization experiment.
+
+The same two cold image-bearing requests then ran together on each package. Each requested an input ceiling of 196608 and an output allowance of 32768; responses generated only the short validation payloads below, not full-length outputs.
+
+| Package and request | Input tokens | Generated tokens | Total time | First token |
+| --- | ---: | ---: | ---: | ---: |
+| Original trunk-q5k: coder | 194655 | 139 | 1306.583 s | 1002.463 s |
+| Original trunk-q5k: designer | 194637 | 103 | 2016.593 s | 2012.263 s |
+| Matching UD-IQ4_XS: coder | 194655 | 249 | 1615.893 s | 984.469 s |
+| Matching UD-IQ4_XS: designer | 194637 | 103 | 2031.170 s | 2026.732 s |
+
+Both packages passed all large-request core checks: required Coder function-call format, Designer JSON values, all three distant markers and exact image colors/numbers. Candidate strict instruction misses: `long_coder.requested_fix_expression`. These are recorded separately from infrastructure/core checks; a core pass is not a claim that every assertion passed. The original Coder returned the exact literal `sorted(set(values))`; the IQ4_XS package's known long-context instruction-following limitation on 02 is documented below.
+
+Long continuation checks were submitted only if an idle slot could be confirmed to hold the matching long prefix. The matching-01 run could not confirm that residency through the available slot telemetry, so these checks were skipped. Candidate skipped checks: `long_cached_continuation_designer; long_cached_continuation_coder`. The original long follow-ups were skipped after live agent traffic evicted their prefixes; the validator's own cold follow-up was cancelled without stopping other users' work. A cold 195K re-prefill is not presented as a cache benchmark. A restricted OpenCode key passed a streamed image/function/tool-result/JSON continuation through the updated `coding` pool, served by 02. A targeted 01 gateway check using the administrator credential passed the streamed vision/tool request in 4.575 seconds and its cached JSON tool-result continuation in 1.138 seconds (471 reused input tokens). These gateway checks have separate authentication and placement scopes; they do not establish a cached 195K continuation on the matching 01 package.
+
+Candidate minimum sampled available RAM was 14.42 GiB; host swap-out counters increased by 7.99 GiB. GPU/OOM kernel matches, runtime device-loss/assertion matches and unexpected container restarts were zero at the end of validation. Host operating-system settings differ: 01's swappiness is 60 and 02's is 10; no kernel settings were changed as part of this model cutover. Native prefills can progress in sequence even with two admitted slots, and large prefill work can delay the other slot's generation.
+
+The client migration contract is context 262144, maximum input 196608 and maximum output 32768 for Coder, Designer and the Memory alias. A formatted request must still fit input plus requested output within its slot. The cold-run timings support the planned 45-minute request timeout (2700 seconds / 2700000 milliseconds). Hermes Agent, Hindsight and OpenCode each need their own timeout migration; changing the backend alone does not update clients. These are bounded synthetic/native and real-key gateway tests, not an overnight or arbitrary project-history qualification.
 
 ### ai-brain-02 — frontier/design
 

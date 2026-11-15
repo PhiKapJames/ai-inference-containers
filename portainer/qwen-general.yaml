@@ -1,6 +1,6 @@
 services:
   qwen-general:
-    image: ghcr.io/phikapjames/qwen38-llama:upstream-23b0202-visionfix
+    image: ghcr.io/phikapjames/qwen38-llama@sha256:40292e60060df51383f0ece220ee92e1f5465c4ddc480105d428dcda5e586e9f
     pull_policy: always
     container_name: qwen-general
     restart: unless-stopped
@@ -16,7 +16,9 @@ services:
       VK_LOADER_DEBUG: error
 
     volumes:
-      - /srv/ai/models/qwen3.8-flash-next:/models:ro
+      - /srv/ai/models/qwen3.8-flash-next-unsloth-iq4xs-v31:/models:ro
+      - /srv/ai/models/qwen3.8-flash-next/mtp-Qwen3.8-Flash-Next-Q4_0.gguf:/draft/mtp-Qwen3.8-Flash-Next-Q4_0.gguf:ro
+      - /srv/ai/models/qwen3.8-flash-next/mmproj-BF16.gguf:/vision/mmproj-BF16.gguf:ro
       - /srv/ai/secrets/qwen-general-api-key:/run/secrets/qwen_api_key:ro
 
     ports:
@@ -27,11 +29,11 @@ services:
     command:
       - --metrics
       - -m
-      - /models/trunk-q5k-00001-of-00003.gguf
+      - /models/Qwen3.8-Flash-Next-UD-IQ4_XS-00001-of-00004.gguf
       - -md
-      - /models/mtp-Qwen3.8-Flash-Next-Q4_0.gguf
+      - /draft/mtp-Qwen3.8-Flash-Next-Q4_0.gguf
       - --mmproj
-      - /models/mmproj-BF16.gguf
+      - /vision/mmproj-BF16.gguf
       - --spec-type
       - draft-mtp
       - --spec-draft-n-max
