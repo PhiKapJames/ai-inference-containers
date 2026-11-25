@@ -1,6 +1,6 @@
 services:
   qwen-general:
-    image: ghcr.io/phikapjames/qwen38-llama@sha256:40292e60060df51383f0ece220ee92e1f5465c4ddc480105d428dcda5e586e9f
+    image: ghcr.io/phikapjames/qwen38-llama@sha256:d0975bfe47c47a157e2590ed40ec211b815b85bc2e3068f08d5fa477ea6371a4
     pull_policy: always
     container_name: qwen-general
     restart: unless-stopped
@@ -59,7 +59,11 @@ services:
       - -lm
       - dio
       - --jinja
-      - --no-reasoning-preserve
+      - --reasoning-preserve
+      - --cache-ram
+      - "8192"
+      - --ctx-checkpoints
+      - "32"
       - --host
       - "0.0.0.0"
       - --port
