@@ -6,7 +6,7 @@ FROM ubuntu:${UBUNTU_VERSION} AS builder
 
 ARG DEBIAN_FRONTEND=noninteractive
 ARG LLAMA_REPO=https://github.com/ggml-org/llama.cpp.git
-ARG LLAMA_REF=23b0202a189c44a54625aadcb37a946dd1d6278d
+ARG LLAMA_REF=72cda4a2228c254f95a556fa238488a1324b04d8
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
@@ -30,15 +30,6 @@ RUN git clone "${LLAMA_REPO}" llama.cpp \
 
 WORKDIR /build/llama.cpp
 
-# Qwen3.8 Flash-Next native vision sends embeddings through the target graph.
-# At this pinned upstream revision, the Qwen4Exp MTP graph still contains an
-# obsolete token-only assertion even though the embeddings path is implemented.
-# Remove exactly that assertion and fail the build if the expected source line
-# is no longer present, so this patch cannot silently drift.
-RUN test "$(grep -Fc 'GGML_ASSERT(ubatch.token && "qwen4exp MTP requires token input");' src/models/qwen4exp.cpp)" = "1" \
- && sed -i '/GGML_ASSERT(ubatch.token && "qwen4exp MTP requires token input");/d' src/models/qwen4exp.cpp \
- && ! grep -Fq 'GGML_ASSERT(ubatch.token && "qwen4exp MTP requires token input");' src/models/qwen4exp.cpp
-
 # Deliberately do not use GGML_NATIVE here. GitHub-hosted runners are not
 # Strix Halo machines; native CPU tuning would optimize for the runner CPU.
 RUN cmake -S . -B build -G Ninja \
@@ -56,11 +47,19 @@ ARG DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
+    curl \
+    gnupg \
     libgomp1 \
     libvulkan1 \
-    mesa-vulkan-drivers \
     vulkan-tools \
- && rm -rf /var/lib/apt/lists/*
+ && curl --fail --location --retry 3 'https://keyserver.ubuntu.com/pks/lookup?op=get&search=0xEB8B81E14DA65431D7504EA8F63F0F2B90935439' -o /tmp/kisak.asc \
+ && test "$(gpg --show-keys --with-colons /tmp/kisak.asc | awk -F: '$1 == "fpr" {print $10; exit}')" = EB8B81E14DA65431D7504EA8F63F0F2B90935439 \
+ && gpg --dearmor -o /usr/share/keyrings/kisak-mesa.gpg /tmp/kisak.asc \
+ && echo 'deb [signed-by=/usr/share/keyrings/kisak-mesa.gpg] https://ppa.launchpadcontent.net/kisak/kisak-mesa/ubuntu resolute main' > /etc/apt/sources.list.d/kisak-mesa.list \
+ && apt-get update -o Acquire::Retries=3 \
+ && apt-get install -y --no-install-recommends 'mesa-vulkan-drivers=26.3.1~kisak2~r' \
+ && dpkg-query -W mesa-vulkan-drivers libvulkan1 \
+ && rm -rf /var/lib/apt/lists/* /tmp/kisak.asc
 
 COPY --from=builder /build/llama.cpp/build/bin/llama-server /usr/local/bin/
 COPY --from=builder /build/llama.cpp/build/bin/*.so* /usr/local/lib/
